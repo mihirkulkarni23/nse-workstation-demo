@@ -6,7 +6,9 @@ A self-contained Streamlit demo with the nine navigation sections from the revie
 
 ## Run locally
 
-Use Python 3.12 and the pinned requirements for deployment. It was initially tested locally with Python 3.14.0 and those exact package versions; Cloud verification is a separate step.
+Use Python 3.12 and the pinned requirements for deployment. All six tests passed on Ubuntu/Python 3.12 in GitHub Actions and locally on Python 3.14.0. The local server also returned HTTP 200 from its health endpoint. Streamlit Community Cloud deployment and browser verification remain separate steps.
+
+Private repository: [mihirkulkarni23/nse-workstation-demo](https://github.com/mihirkulkarni23/nse-workstation-demo). [Initial Linux test results](https://github.com/mihirkulkarni23/nse-workstation-demo/actions/runs/41436038874).
 
 ```text
 python -m pip install -r requirements.txt
