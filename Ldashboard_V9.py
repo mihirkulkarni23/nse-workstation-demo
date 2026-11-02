@@ -16,7 +16,7 @@ from dashboard_data import (
 st.set_page_config(page_title="NSE Workstation | Demo", page_icon="📊", layout="wide")
 st.markdown("""
 <style>
- .block-container {padding-top:2rem; padding-bottom:2rem; max-width:1560px;}
+ .block-container {padding-bottom:2rem; max-width:1560px;}
  [data-testid="stMetric"] {background:#131f33; border:1px solid #24344b;
    border-radius:12px; padding:14px 18px;}
  [data-testid="stMetricLabel"] {color:#a8b8ce;}
