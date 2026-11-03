@@ -56,7 +56,8 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(participation(pd.DataFrame()), 0)
 
     def test_app_contains_no_writer_or_trading_imports(self):
-        for filename in ("Ldashboard_V9.py", "dashboard_data.py"):
+        for filename in ("Ldashboard_V9.py", "dashboard_data.py", "snapshot_reader.py", "snapshot_views.py",
+                         "drive_reader.py"):
             tree = ast.parse((ROOT / filename).read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom):

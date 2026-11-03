@@ -4,16 +4,29 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 
 import pandas as pd
 
 SCHEMA_VERSION = 1
 DEMO_PATH = Path(__file__).resolve().parent / "data" / "demo_snapshot.json"
+MODES = ("demo", "uploaded_snapshot", "drive_snapshot")
 NAV_OPTIONS = [
     "30M Scanner", "Hourly Signals", "Daily Signals", "Historical Cache",
     "Portfolio", "Journal", "Analytics", "Trade Reviews", "System Health",
 ]
+
+
+def configured_mode(environ=os.environ) -> tuple[str, str | None]:
+    """Explicit source selection. Unset means demo; anything unrecognised is an error, never demo."""
+    mode = environ.get("NSE_DATA_MODE", "").strip() or "demo"
+    if mode not in MODES:
+        raise ValueError(f"Unknown NSE_DATA_MODE {mode!r}; expected one of {', '.join(MODES)}.")
+    path = environ.get("NSE_SNAPSHOT_PATH", "").strip() or None
+    if mode == "uploaded_snapshot" and not path:
+        raise ValueError("NSE_DATA_MODE is uploaded_snapshot but NSE_SNAPSHOT_PATH is not set.")
+    return mode, path
 
 
 def validate_snapshot(snapshot: dict) -> None:

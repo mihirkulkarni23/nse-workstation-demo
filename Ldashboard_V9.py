@@ -1,6 +1,7 @@
-"""Self-contained read-only demonstration of the nine-section workstation.
+"""Read-only nine-section workstation: synthetic demo, or a private snapshot read locally or from Drive.
 
-This is a new demo entry point. It does not import or execute the trading engine.
+This is a new entry point. It does not import or execute the trading engine. The mode is
+chosen explicitly (NSE_DATA_MODE); a failed snapshot load never falls back to demo data.
 """
 
 from datetime import datetime
@@ -10,10 +11,17 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from dashboard_data import (
-    NAV_OPTIONS, load_snapshot, participation, performance, positions_frame, summary, table,
+    NAV_OPTIONS, configured_mode, load_snapshot, participation, performance, positions_frame, summary, table,
 )
 
-st.set_page_config(page_title="NSE Workstation | Demo", page_icon="📊", layout="wide")
+try:
+    MODE, SNAPSHOT_PATH = configured_mode()
+    CONFIG_ERROR = None
+except ValueError as exc:
+    MODE, SNAPSHOT_PATH, CONFIG_ERROR = None, None, str(exc)
+
+st.set_page_config(page_title="NSE Workstation | " + ("Demo" if MODE == "demo" else "Snapshot"),
+                   page_icon="📊", layout="wide")
 st.markdown("""
 <style>
  .block-container {padding-bottom:2rem; max-width:1560px;}
@@ -278,51 +286,65 @@ def health_view(snapshot: dict) -> None:
     st.caption(f"Generation {snapshot['generation_id']} · schema {snapshot['schema_version']} · timezone Asia/Kolkata")
 
 
-try:
-    snapshot = load_snapshot()
-    totals = summary(snapshot)
-except (OSError, ValueError, KeyError, TypeError) as exc:
-    st.error(f"Demo snapshot unavailable: {exc}")
-    st.stop()
+def run_demo() -> None:
+    try:
+        snapshot = load_snapshot()
+        totals = summary(snapshot)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        st.error(f"Demo snapshot unavailable: {exc}")
+        st.stop()
 
-st.markdown('<div class="eyebrow">NSE / F&O · MONITORING WORKSPACE</div>', unsafe_allow_html=True)
-left, right = st.columns([5, 1])
-with left:
-    st.title("Trading workstation")
-    st.caption("Signals, positions and research — one read-only workspace.")
-with right:
+    st.markdown('<div class="eyebrow">NSE / F&O · MONITORING WORKSPACE</div>', unsafe_allow_html=True)
+    left, right = st.columns([5, 1])
+    with left:
+        st.title("Trading workstation")
+        st.caption("Signals, positions and research — one read-only workspace.")
+    with right:
+        st.write("")
+        if st.button("↻ Reload demo", width="stretch"):
+            st.rerun()
+    st.warning("DEMO DATA — Every signal, price, position and return is synthetic. No live market feed or broker is connected.", icon="🧪")
+    st.caption(f"Fixed example snapshot · {snapshot['generated_at']} · Asia/Kolkata · reload does not advance market data")
+
+    latest30 = pd.DataFrame(snapshot["signals"]["30M"])
+    signal_count = int(latest30.candle_datetime.eq(latest30.candle_datetime.max()).sum()) if not latest30.empty else 0
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("30M signals", signal_count)
+    c2.metric("Open positions", totals["open_positions"])
+    c3.metric("Closed trades", totals["closed_positions"])
+    c4.metric("Capital deployed", money(totals["capital_deployed"]))
+    c5.metric("Open MTM", money(totals["open_mtm"]))
+    c6.metric("Source status", "DEMO")
     st.write("")
-    if st.button("↻ Reload demo", width="stretch"):
-        st.rerun()
-st.warning("DEMO DATA — Every signal, price, position and return is synthetic. No live market feed or broker is connected.", icon="🧪")
-st.caption(f"Fixed example snapshot · {snapshot['generated_at']} · Asia/Kolkata · reload does not advance market data")
+    selected_view = st.radio("Dashboard section", NAV_OPTIONS, horizontal=True, key="dashboard_view",
+                             label_visibility="collapsed")
+    st.divider()
+    if selected_view in NAV_OPTIONS[:3]:
+        signal_view(snapshot, {"30M Scanner": "30M", "Hourly Signals": "1H", "Daily Signals": "1D"}[selected_view])
+    elif selected_view == "Historical Cache":
+        historical_view(snapshot)
+    elif selected_view == "Portfolio":
+        portfolio_view(snapshot, totals)
+    elif selected_view == "Journal":
+        journal_view(snapshot)
+    elif selected_view == "Analytics":
+        analytics_view(snapshot)
+    elif selected_view == "Trade Reviews":
+        review_view(snapshot)
+    else:
+        health_view(snapshot)
+    st.divider()
+    st.caption("DEMO / READ-ONLY · No orders, position updates, review edits or equity writes · Synthetic examples only")
 
-latest30 = pd.DataFrame(snapshot["signals"]["30M"])
-signal_count = int(latest30.candle_datetime.eq(latest30.candle_datetime.max()).sum()) if not latest30.empty else 0
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("30M signals", signal_count)
-c2.metric("Open positions", totals["open_positions"])
-c3.metric("Closed trades", totals["closed_positions"])
-c4.metric("Capital deployed", money(totals["capital_deployed"]))
-c5.metric("Open MTM", money(totals["open_mtm"]))
-c6.metric("Source status", "DEMO")
-st.write("")
-selected_view = st.radio("Dashboard section", NAV_OPTIONS, horizontal=True, key="dashboard_view",
-                         label_visibility="collapsed")
-st.divider()
-if selected_view in NAV_OPTIONS[:3]:
-    signal_view(snapshot, {"30M Scanner": "30M", "Hourly Signals": "1H", "Daily Signals": "1D"}[selected_view])
-elif selected_view == "Historical Cache":
-    historical_view(snapshot)
-elif selected_view == "Portfolio":
-    portfolio_view(snapshot, totals)
-elif selected_view == "Journal":
-    journal_view(snapshot)
-elif selected_view == "Analytics":
-    analytics_view(snapshot)
-elif selected_view == "Trade Reviews":
-    review_view(snapshot)
+
+if CONFIG_ERROR:
+    st.error(f"DATA SOURCE NOT CONFIGURED — {CONFIG_ERROR} No demo or synthetic data is shown in its place.", icon="⛔")
+    st.stop()
+if MODE == "uploaded_snapshot":
+    from snapshot_views import render
+    render(SNAPSHOT_PATH)
+elif MODE == "drive_snapshot":
+    from snapshot_views import render_drive
+    render_drive(st.secrets)
 else:
-    health_view(snapshot)
-st.divider()
-st.caption("DEMO / READ-ONLY · No orders, position updates, review edits or equity writes · Synthetic examples only")
+    run_demo()

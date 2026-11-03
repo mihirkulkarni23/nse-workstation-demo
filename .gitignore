@@ -10,3 +10,4 @@ data/production/
 *.db
 *.sqlite
 *.log
+secrets.toml

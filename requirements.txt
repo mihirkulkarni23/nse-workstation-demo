@@ -1,3 +1,9 @@
+# Cloud viewer (Streamlit Community Cloud) dependencies only.
+# The laptop producer (producer/) uses the Python standard library and needs none of these.
+# A future laptop-only collector (for example breeze-connect) must get its own requirements file,
+# never this one: nothing broker-related may be installed in the hosted viewer.
 streamlit==1.55.0
 pandas==2.3.3
 plotly==6.5.2
+google-auth==2.48.0
+requests==2.32.5
