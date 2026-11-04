@@ -19,7 +19,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from producer.import_csv import BUILDERS, DATASETS, SCHEMA_VERSION, SNAPSHOT_NAME, _inside_git_worktree, _sha256_file
+from producer.import_csv import (
+    BUILDERS, CROSS_FILE_REASON, DATASETS, SCHEMA_VERSION, SNAPSHOT_NAME, _inside_git_worktree, _sha256_file,
+)
 
 MANIFEST_NAME = "current_manifest.json"
 MANIFEST_KIND = "nse_dashboard_snapshot_manifest"
@@ -130,6 +132,8 @@ def describe_snapshot(path: Path, generation_id: str) -> dict:
         "datasets": datasets, "factor_research_rows": factor_rows, "quality": quality,
         "capabilities": {k: v.get("status") for k, v in meta["capabilities"].items()},
         "timezone_status": "unverified",
+        "cross_file_consistency": meta.get("cross_file_consistency",
+                                           {"status": "unverified", "reason": CROSS_FILE_REASON}),
     }
 
 
