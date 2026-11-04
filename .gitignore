@@ -11,3 +11,4 @@ data/production/
 *.sqlite
 *.log
 secrets.toml
+publisher_config.ini

@@ -68,6 +68,21 @@ set NSE_SNAPSHOT_PATH=<private folder outside Git>
 python -m streamlit run Ldashboard_V9.py --server.address localhost --server.port 8503
 ```
 
+## Laptop publisher package (friend's Windows laptop)
+
+`publisher/` holds the files for a separate, standalone package that runs the importer and exporter from one manual launcher: `publisher_config.example.ini` (six explicit source paths and a private output folder), `Run NSE snapshot publisher.cmd`, `Check installation.cmd` and a plain-English `README.txt`. It needs only Python 3.10+ (3.12 tested) with no extra packages, and it never modifies the trading application or its files.
+
+```text
+python publisher/build_package.py --output-dir <folder outside Git>
+```
+
+The builder copies an explicit file list into `NSE-Snapshot-Publisher/` and `NSE-Snapshot-Publisher.zip`, refusing data, credentials and existing packages. Each run of `producer.publish` behaves as follows:
+
+- **Refuses unready sources:** empty files, files changed within `settle_seconds`, files cut off mid-line, and files that change between two looks.
+- **Builds and exports:** creates a new immutable generation and its export.
+- **Updates the pointer last:** writes `LATEST_PUBLICATION.txt` only on success, so a failure leaves earlier publications untouched.
+- **Reports cross-file consistency as unverified,** because there is no upstream completion marker.
+
 ## Private snapshot importer (laptop only)
 
 `producer/import_csv.py` reads the six application CSVs (`scanner_30m_signals`, `hourly_signal_scan`, `daily_signal_scan`, `open_positions`, `closed_positions`, `daily_equity`) and builds a new, versioned SQLite generation in a private folder. It uses only the Python standard library, never modifies or imports the original trading code, and refuses to write inside a Git working tree. The hosted app does not import it.

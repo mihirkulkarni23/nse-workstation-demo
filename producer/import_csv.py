@@ -30,6 +30,8 @@ SCHEMA_VERSION = 1
 IMPORTER_VERSION = "1.0.0"
 RECORD_ORIGIN = "application_recorded"
 DATA_LABELS = ("supplied_csv", "synthetic_test")
+CROSS_FILE_REASON = ("No upstream completion marker: the six files are checked one by one, but they may come "
+                     "from different trading-app cycles.")
 SNAPSHOT_NAME = "dashboard_snapshot.sqlite"
 DIRECTIONS = {"LONG", "SHORT"}
 MATCH_TOLERANCE = 0.011
@@ -661,14 +663,23 @@ def run_import(source_dir: Path, output_dir: Path, data_label: str = "supplied_c
 
     data_label records what the CSVs are; `synthetic_test` makes every viewer show a synthetic banner.
     """
-    if data_label not in DATA_LABELS:
-        raise ImportFailed(f"Unknown data label {data_label!r}")
-    source_dir, output_dir = Path(source_dir).resolve(), Path(output_dir).resolve()
+    source_dir = Path(source_dir).resolve()
     if not source_dir.is_dir():
         raise ImportFailed(f"Source folder not found: {source_dir}")
+    return run_import_files({ds.name: source_dir / ds.file_name for ds in DATASETS}, output_dir, data_label)
+
+
+def run_import_files(paths: dict[str, Path], output_dir: Path, data_label: str = "supplied_csv") -> dict:
+    """run_import for six explicitly configured files, keyed by dataset name."""
+    if data_label not in DATA_LABELS:
+        raise ImportFailed(f"Unknown data label {data_label!r}")
+    if set(paths) != {ds.name for ds in DATASETS}:
+        raise ImportFailed(f"Expected exactly these sources: {', '.join(ds.name for ds in DATASETS)}")
+    paths = {name: Path(p).resolve() for name, p in paths.items()}
+    output_dir = Path(output_dir).resolve()
     if _inside_git_worktree(output_dir):
         raise ImportFailed(f"Output folder is inside a Git working tree; refusing: {output_dir}")
-    missing = [ds.file_name for ds in DATASETS if not (source_dir / ds.file_name).is_file()]
+    missing = [str(paths[ds.name]) for ds in DATASETS if not paths[ds.name].is_file()]
     if missing:
         raise ImportFailed(f"Missing source files: {', '.join(missing)}")
 
@@ -676,13 +687,13 @@ def run_import(source_dir: Path, output_dir: Path, data_label: str = "supplied_c
     tables: dict[str, list[dict]] = {name: [] for name in TABLES}
     sources, problems = [], []
     for ds in DATASETS:
-        path = source_dir / ds.file_name
+        path = paths[ds.name]
         data, header, rows = _read_source(path)
         absent = [c for c in ds.columns if c not in header]
         if absent:
-            problems.append(f"{ds.file_name}: missing columns {absent}")
+            problems.append(f"{path.name}: missing columns {absent}")
         if len(set(header)) != len(header):
-            problems.append(f"{ds.file_name}: duplicate column names")
+            problems.append(f"{path.name}: duplicate column names")
         stat = path.stat()
         sources.append({"ds": ds, "path": path, "sha256": hashlib.sha256(data).hexdigest(),
                         "size_bytes": len(data), "header": header, "rows": rows,
@@ -773,11 +784,11 @@ def _write_generation(work_dir: Path, generation_id: str, created: datetime, sou
     tables["data_quality"] = quality
 
     after = {s["ds"].name: _sha256_file(s["path"]) for s in sources}
-    changed = [s["ds"].file_name for s in sources if after[s["ds"].name] != s["sha256"]]
+    changed = [s["path"].name for s in sources if after[s["ds"].name] != s["sha256"]]
     if changed:
         raise ImportFailed(f"Source changed while importing; generation discarded: {', '.join(changed)}")
     tables["source_files"] = [{
-        "dataset": s["ds"].name, "file_name": s["ds"].file_name, "sha256": s["sha256"],
+        "dataset": s["ds"].name, "file_name": s["path"].name, "sha256": s["sha256"],
         "sha256_after_import": after[s["ds"].name], "size_bytes": s["size_bytes"],
         "modified_utc": s["modified_utc"], "header_json": _dumps(s["header"]), "data_rows": len(s["rows"]),
         "stored_rows": s["stored_rows"], "quarantined_rows": s["quarantined_rows"]} for s in sources]
@@ -788,6 +799,7 @@ def _write_generation(work_dir: Path, generation_id: str, created: datetime, sou
         "created_at_utc": created.isoformat(), "importer": "producer.import_csv",
         "importer_version": IMPORTER_VERSION, "mode": "uploaded_snapshot", "record_origin": RECORD_ORIGIN,
         "data_label": data_label,
+        "cross_file_consistency": {"status": "unverified", "reason": CROSS_FILE_REASON},
         "timezone_policy": {"status": "unverified", "note": "Source timestamps carry no offset. Normalized "
                             "values are naive source times, not UTC and not confirmed Asia/Kolkata."},
         "time_frontiers": frontiers, "strategy_processed_through": None,
@@ -824,7 +836,7 @@ def _write_generation(work_dir: Path, generation_id: str, created: datetime, sou
     for s in sources:
         stored, held = counts[s["ds"].name]
         datasets[s["ds"].name] = {
-            "file_name": s["ds"].file_name, "sha256_before": s["sha256"], "sha256_after": after[s["ds"].name],
+            "file_name": s["path"].name, "sha256_before": s["sha256"], "sha256_after": after[s["ds"].name],
             "source_unchanged": after[s["ds"].name] == s["sha256"], "source_rows": len(s["rows"]),
             "stored_rows": stored, "quarantined_rows": held, "reconciled": stored + held == len(s["rows"])}
     if not all(d["reconciled"] for d in datasets.values()):

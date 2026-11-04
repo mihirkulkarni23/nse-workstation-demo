@@ -443,7 +443,10 @@ def health_view(snap: dict) -> None:
     frontiers += [{"Dataset": "Strategy processing", "Latest in file": UNKNOWN,
                    "Basis": "No engine completion record was supplied"},
                   {"Dataset": "Market observations", "Latest in file": "None",
-                   "Basis": "No price feed in this snapshot"}]
+                   "Basis": "No price feed in this snapshot"},
+                  {"Dataset": "Cross-file consistency", "Latest in file": "Unverified",
+                   "Basis": meta.get("cross_file_consistency", {}).get(
+                       "reason", "No upstream completion marker; the six files may come from different cycles.")}]
     st.dataframe(pd.DataFrame(frontiers), hide_index=True, width="stretch")
     st.caption(TIME_NOTE + " A newer snapshot does not make the underlying signals newer.")
 
